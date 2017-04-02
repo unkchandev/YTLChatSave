@@ -1,7 +1,8 @@
 package main
 
 import (
-	_ "fmt"
+	"encoding/json"
+	"fmt"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -9,17 +10,13 @@ import (
 type YoutubeChatFormatter struct {
 }
 
-var logger = log.New()
+var output = log.New()
 
-//func (f *YoutubeChatFormatter) Format(entry *Entry) (byte[], error) {
-//serialized, err := json.Marshal(entry.Data)
-//if err != nil {
-//	return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
-//}
-//return append(serialized, '\n'), nil
-//	return nil, nil
-//}
-
-func GetLogger() *log.Logger {
-	return logger
+func (f *YoutubeChatFormatter) Format(entry *log.Entry) ([]byte, error) {
+	serialized, err := json.Marshal(entry.Data)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to marshal fields to JSON, %v", err)
+	}
+	return append(serialized, '\n'), nil
+	return nil, nil
 }

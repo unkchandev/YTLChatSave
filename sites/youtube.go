@@ -69,8 +69,7 @@ type YoutubeService struct {
 	liveChatIDUrl string
 	liveChatUrl   string
 
-	nextPageToken         string
-	pollingIntervalMillis int
+	nextPageToken string
 }
 
 type LiveInfo struct {
@@ -105,6 +104,10 @@ func NewYoutubeService() *YoutubeService {
 	ys.ChannelID = yc.ChannelID
 	ys.setConfig()
 	return &ys
+}
+
+func (ys *YoutubeService) GetChannelTitle() string {
+	return liveInfo.ChannelTitle
 }
 
 func (ys *YoutubeService) setConfig() {
@@ -224,9 +227,6 @@ func (r *YoutubeService) GetLiveChatID() (activeLiveChatID string, err error) {
 func (r *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 	if r.activeLiveChatID == "" {
 		return LiveChatsStr{}, fmt.Errorf("Unable to access activeLiveChatID property")
-	}
-	if r.pollingIntervalMillis > 0 {
-		time.Sleep(time.Duration(r.pollingIntervalMillis) * time.Millisecond)
 	}
 
 	var url string

@@ -2,14 +2,37 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"save-youtube-live-chat/sites"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
+
+var logger = log.New()
+
+const filenameFormat = "2006-01-02 15-04-05"
 
 func main() {
 	ys := sites.NewYoutubeService()
-	logger := GetLogger()
+	if err := os.Mkdir(ys.GetChannelTitle(), 0777); err != nil {
+		logger.Debug(err)
+	}
+	filename := fmt.Sprint(ys.GetChannelTitle(), "\\", time.Now().Format(filenameFormat), ".txt")
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	if err != nil {
+		logger.Debug(err)
+	}
+	defer f.Close()
+	output.Out = f
+	logger.Println("write")
+	_, err = f.Write([]byte("test"))
+	if err != nil {
+		logger.Debug(err)
+	}
+	logger.Println("write")
+	//output.Formatter = new(YoutubeChatFormatter)
 
 	q := make(chan sites.LiveChatsStr, 2)
 
@@ -37,6 +60,13 @@ func main() {
 		case chats := <-q:
 			logger.Debug(chats)
 			json.NewEncoder(os.Stdout).Encode(chats)
+			for _, v := range chats.Items {
+				output.Println(
+					//v.Snippet.PublishedAt.Unix(),
+					//"\t",
+					v.Snippet.DisplayMessage,
+				)
+			}
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
