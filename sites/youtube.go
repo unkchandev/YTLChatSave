@@ -8,8 +8,11 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
+
+var logger = log.New()
 
 type LiveCheckStr struct {
 	PageInfo struct {
@@ -40,8 +43,9 @@ type LiveChatIDStr struct {
 }
 
 type LiveChatsStr struct {
-	NextPageToken string `json:"nextPageToken"`
-	Items         []struct {
+	NextPageToken         string `json:"nextPageToken"`
+	PollingIntervalMillis int    `json:"pollingIntervalMillis"`
+	Items                 []struct {
 		Snippet struct {
 			AuthorChannelID string    `json:"authorChannelId"`
 			PublishedAt     time.Time `json:"publishedAt"`
@@ -65,7 +69,8 @@ type YoutubeService struct {
 	liveChatIDUrl string
 	liveChatUrl   string
 
-	nextPageToken string
+	nextPageToken         string
+	pollingIntervalMillis int
 }
 
 type LiveInfo struct {
@@ -80,7 +85,7 @@ var liveInfo LiveInfo
 const (
 	BASE_SEARCH_URL       = "https://www.googleapis.com/youtube/v3/search?part=snippet&eventType=live&fields=pageInfo%2FtotalResults%2Citems%2Fid%2FvideoId%2Citems%2Fsnippet%2Ftitle%2Citems%2Fsnippet%2Fdescription%2Citems%2Fsnippet%2FchannelTitle&type=video&channelId=__channelID__&key=__key__"
 	BASE_LIVE_CHAT_ID_URL = "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&fields=pageInfo%2FtotalResults%2Citems%2FliveStreamingDetails%2FactualStartTime%2Citems%2FliveStreamingDetails%2FactiveLiveChatId&id=__id__&key=__key__"
-	BASE_LIVE_CHAT_URL    = "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet&hl=ja&maxResults=2000&fields=items%2Fsnippet%2FdisplayMessage%2Citems%2Fsnippet%2FpublishedAt%2Citems%2Fsnippet%2FauthorChannelId%2CnextPageToken&liveChatId=__liveChatID__&key=__key__"
+	BASE_LIVE_CHAT_URL    = "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet&hl=ja&maxResults=2000&fields=items%2Fsnippet%2FdisplayMessage%2Citems%2Fsnippet%2FpublishedAt%2Citems%2Fsnippet%2FauthorChannelId%2CnextPageToken%2CpollingIntervalMillis&liveChatId=__liveChatID__&key=__key__"
 )
 
 func NewYoutubeService() *YoutubeService {
@@ -93,7 +98,7 @@ func NewYoutubeService() *YoutubeService {
 	var yc YoutubeConfig
 	err = yaml.Unmarshal(buf, &yc)
 	if err != nil {
-		fmt.Println("error: %v", err)
+		logger.Info("error: %v", err)
 	}
 
 	ys.ApiKey = yc.APIKey
@@ -105,36 +110,25 @@ func NewYoutubeService() *YoutubeService {
 func (ys *YoutubeService) setConfig() {
 	videoID, err := ys.GetLiveID()
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Info(err.Error())
 	}
 	if videoID != "" {
-		fmt.Println("Now live: " + videoID)
+		logger.Info("Now live: " + videoID)
 	} else {
-		fmt.Println("no live...")
+		logger.Info("no live...")
 	}
+	ys.videoID = videoID
 
 	liveChatID, err := ys.GetLiveChatID()
 	if err != nil {
-		fmt.Println(err.Error())
+		logger.Info(err.Error())
 	}
 	if liveChatID != "" {
-		fmt.Println("Now live chat ID: " + liveChatID)
+		logger.Info("Now live chat ID: " + liveChatID)
 	} else {
-		fmt.Println("Undefined error.")
+		logger.Info("Undefined error.")
 	}
-
-	chats, err := ys.GetLiveChats()
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	if len(chats.Items) != 0 {
-		for _, item := range chats.Items {
-			fmt.Println(item.Snippet.DisplayMessage)
-		}
-	} else {
-		fmt.Println("No new messages found.")
-	}
-
+	ys.activeLiveChatID = liveChatID
 }
 
 func (r *YoutubeService) GetLiveID() (watchID string, err error) {
@@ -147,7 +141,7 @@ func (r *YoutubeService) GetLiveID() (watchID string, err error) {
 		url = r.searchUrl
 	}
 
-	fmt.Println(url)
+	logger.Info(url)
 	//get
 	res, err := http.Get(url)
 	if err != nil {
@@ -178,7 +172,6 @@ func (r *YoutubeService) GetLiveID() (watchID string, err error) {
 	liveInfo.Description = s.Items[0].Snippet.Description
 	liveInfo.ChannelTitle = s.Items[0].Snippet.ChannelTitle
 
-	r.videoID = s.Items[0].ID.VideoID
 	return s.Items[0].ID.VideoID, nil
 }
 
@@ -196,7 +189,7 @@ func (r *YoutubeService) GetLiveChatID() (activeLiveChatID string, err error) {
 		url = r.liveChatIDUrl
 	}
 
-	fmt.Println(url)
+	logger.Info(url)
 	//get
 	res, err := http.Get(url)
 	if err != nil {
@@ -225,13 +218,15 @@ func (r *YoutubeService) GetLiveChatID() (activeLiveChatID string, err error) {
 
 	liveInfo.StartTime = s.Items[0].LiveStreamingDetails.ActualStartTime
 
-	r.activeLiveChatID = s.Items[0].LiveStreamingDetails.ActiveLiveChatID
 	return s.Items[0].LiveStreamingDetails.ActiveLiveChatID, nil
 }
 
 func (r *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 	if r.activeLiveChatID == "" {
 		return LiveChatsStr{}, fmt.Errorf("Unable to access activeLiveChatID property")
+	}
+	if r.pollingIntervalMillis > 0 {
+		time.Sleep(time.Duration(r.pollingIntervalMillis) * time.Millisecond)
 	}
 
 	var url string
@@ -241,11 +236,12 @@ func (r *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 		r.liveChatUrl = url
 	} else if r.nextPageToken != "" {
 		url = r.liveChatUrl + "&pageToken=" + r.nextPageToken
+		logger.Debug(r.nextPageToken)
 	} else {
 		url = r.liveChatUrl
 	}
 
-	fmt.Println(url)
+	logger.Info(url)
 	//get
 	res, _ := http.Get(url)
 	if err != nil {
@@ -268,11 +264,11 @@ func (r *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 	}
 
 	//check
-	if s.NextPageToken == "" {
-		return LiveChatsStr{}, fmt.Errorf("Unable to get liveChats from active live: video id %s", r.videoID)
-	} else {
+	logger.Debug(s)
+	if r.nextPageToken != s.NextPageToken {
 		r.nextPageToken = s.NextPageToken
 	}
 
+	logger.Info(s)
 	return s, nil
 }
