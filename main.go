@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,8 +12,24 @@ import (
 )
 
 var logger = log.New()
+var output = log.New()
 
 const filenameFormat = "2006-01-02 15-04-05"
+
+type YoutubeChatFormatter struct {
+}
+
+func (f *YoutubeChatFormatter) Format(entry *log.Entry) ([]byte, error) {
+	var b *bytes.Buffer
+	if entry.Buffer != nil {
+		b = entry.Buffer
+	} else {
+		b = &bytes.Buffer{}
+	}
+	b.WriteString(entry.Message)
+	b.WriteByte('\n')
+	return b.Bytes(), nil
+}
 
 func main() {
 	ys := sites.NewYoutubeService()
@@ -26,13 +43,7 @@ func main() {
 	}
 	defer f.Close()
 	output.Out = f
-	logger.Println("write")
-	_, err = f.Write([]byte("test"))
-	if err != nil {
-		logger.Debug(err)
-	}
-	logger.Println("write")
-	//output.Formatter = new(YoutubeChatFormatter)
+	output.Formatter = new(YoutubeChatFormatter)
 
 	q := make(chan sites.LiveChatsStr, 2)
 
@@ -62,8 +73,8 @@ func main() {
 			json.NewEncoder(os.Stdout).Encode(chats)
 			for _, v := range chats.Items {
 				output.Println(
-					//v.Snippet.PublishedAt.Unix(),
-					//"\t",
+					v.Snippet.PublishedAt.Unix(),
+					"\t",
 					v.Snippet.DisplayMessage,
 				)
 			}
