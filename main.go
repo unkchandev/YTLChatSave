@@ -54,7 +54,11 @@ func main() {
 }
 
 func mainLoop() {
-	ys := sites.NewYoutubeService(logch)
+	ys, err := sites.NewYoutubeService(logch)
+	if err != nil {
+		logch <- "Unable to load config.yml file. Error:" + err.Error()
+		return
+	}
 	logch <- "Load completed. Start monitoring."
 	go checkLiveLoop(ys)
 }

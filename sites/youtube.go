@@ -103,23 +103,23 @@ const (
 	BASE_LIVE_CHAT_URL    = "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet&hl=ja&maxResults=2000&fields=items%2Fsnippet%2FdisplayMessage%2Citems%2Fsnippet%2FpublishedAt%2Citems%2Fsnippet%2FauthorChannelId%2CnextPageToken%2CpollingIntervalMillis&liveChatId=__liveChatID__&key=__key__"
 )
 
-func NewYoutubeService(logch chan string) *YoutubeService {
+func NewYoutubeService(logch chan string) (*YoutubeService, error) {
 	ys := YoutubeService{}
 	ys.logch = logch
 	buf, err := ioutil.ReadFile("config.yml")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	var yc YoutubeConfig
 	err = yaml.Unmarshal(buf, &yc)
 	if err != nil {
-		logch <- fmt.Sprintf("error: %v", err)
+		return nil, err
 	}
 
 	ys.ApiKey = yc.APIKey
 	ys.ChannelID = yc.ChannelID
-	return &ys
+	return &ys, nil
 }
 
 func (ys *YoutubeService) Init() {
