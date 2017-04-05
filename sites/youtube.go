@@ -91,6 +91,7 @@ func (f *YoutubeChatFormatter) Format(entry *log.Entry) ([]byte, error) {
 		b = &bytes.Buffer{}
 	}
 	b.WriteString(entry.Message)
+	b.WriteByte('\r')
 	b.WriteByte('\n')
 	return b.Bytes(), nil
 }

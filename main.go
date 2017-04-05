@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"save-youtube-live-chat/sites"
+	"strconv"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -131,11 +132,10 @@ func ChatSave(ys *sites.YoutubeService) {
 		select {
 		case chats := <-q:
 			for _, v := range chats.Items {
-				output.Println(
-					v.Snippet.PublishedAt.Unix(),
-					"\t",
-					v.Snippet.DisplayMessage,
-				)
+				text := strconv.FormatInt(v.Snippet.PublishedAt.Unix(), 10) +
+					"\t" +
+					v.Snippet.DisplayMessage
+				output.Println(text)
 			}
 		case isLive := <-livech:
 			endch <- false
