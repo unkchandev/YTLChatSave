@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"save-youtube-live-chat/sites"
 	"strconv"
 	"time"
 
@@ -28,12 +27,12 @@ const filenameFormat = "2006-01-02 15-04-05"
 func main() {
 	go mainLoop()
 	go logging()
-	output.Formatter = new(sites.YoutubeChatFormatter)
+	output.Formatter = new(YoutubeChatFormatter)
 
 	MW := MainWindow{
 		AssignTo: &mw.MainWindow,
 		Title:    "save youtube live chat",
-		MinSize:  Size{600, 450},
+		MinSize:  Size{640, 480},
 		Layout:   VBox{},
 		Children: []Widget{
 			TextEdit{AssignTo: &mw.logTE, ReadOnly: true},
@@ -55,7 +54,7 @@ func main() {
 }
 
 func mainLoop() {
-	ys, err := sites.NewYoutubeService(logch)
+	ys, err := NewYoutubeService(logch)
 	if err != nil {
 		logch <- "Unable to load config.yml file. Error:" + err.Error()
 		return
@@ -64,7 +63,7 @@ func mainLoop() {
 	go checkLiveLoop(ys)
 }
 
-func checkLiveLoop(ys *sites.YoutubeService) {
+func checkLiveLoop(ys *YoutubeService) {
 	isLiveOld := false
 	for {
 		isLive, err := ys.CheckLive()
@@ -77,18 +76,16 @@ func checkLiveLoop(ys *sites.YoutubeService) {
 			go ChatSave(ys)
 		} else if !isLive && isLiveOld {
 			isLiveOld = false
-			logch <- "Live finished on " + ys.GetChannelTitle()
+			logch <- "Live finished."
 			ys.Init()
+			ys.nextPageToken = ""
 			livech <- false
 		}
 		time.Sleep(5 * time.Second)
 	}
 }
 
-func ChatSave(ys *sites.YoutubeService) {
-	q := make(chan sites.LiveChatsStr, 5)
-	endch := make(chan bool, 2)
-
+func ChatSave(ys *YoutubeService) {
 	if _, err := os.Stat(ys.GetChannelTitle()); os.IsNotExist(err) {
 		if err := os.Mkdir(ys.GetChannelTitle(), 0777); err != nil {
 			logch <- err.Error()
@@ -105,46 +102,44 @@ func ChatSave(ys *sites.YoutubeService) {
 
 	ys.SetConfig()
 
-	go func(livech chan bool) {
-		var interval int
-		for {
+	var chatsNum = 0
+	for {
+		select {
+		case isLive := <-livech:
+			if !isLive {
+				logch <- "Chat save complete. Monitoring next live."
+				return
+			}
+		default:
+			var interval int
 			chats, err := ys.GetLiveChats()
 			if err != nil {
 				logch <- err.Error()
+				continue
 			}
-			select {
-			case q <- chats:
-				if chats.PollingIntervalMillis == 0 {
-					interval = 5000
-				} else {
-					interval = chats.PollingIntervalMillis
-				}
-				time.Sleep(time.Duration(interval) * time.Millisecond)
-			case isLive := <-livech:
-				if !isLive {
-					return
-				}
+			if chats.PollingIntervalMillis == 0 {
+				interval = 5000
+			} else {
+				interval = chats.PollingIntervalMillis
 			}
-		}
-	}(endch)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 
-	for {
-		select {
-		case chats := <-q:
+			if len(chats.Items) == 0 && chatsNum == 0 {
+				logch <- "Chats is in silence. Getting live chat ID again..."
+				ys.Init()
+				ys.SetConfig()
+				continue
+			}
+			chatsNum = len(chats.Items)
+
+			//output to file
 			for _, v := range chats.Items {
 				text := strconv.FormatInt(v.Snippet.PublishedAt.Unix(), 10) +
 					"\t" +
 					v.Snippet.DisplayMessage
 				output.Println(text)
 			}
-		case isLive := <-livech:
-			endch <- false
-			if !isLive {
-				return
-			}
 		}
-
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
