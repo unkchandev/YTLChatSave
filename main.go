@@ -151,6 +151,6 @@ func ChatSave(ys *sites.YoutubeService) {
 func logging() {
 	for {
 		msg := <-logch
-		mw.logTE.AppendText(time.Now().Format("2006-01-02 15:04:05") + "[LOG]" + msg + "\n")
+		mw.logTE.AppendText(time.Now().Format("2006-01-02 15:04:05") + "[LOG]" + msg + "\r\n")
 	}
 }
