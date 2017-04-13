@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	log "github.com/Sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -65,9 +66,9 @@ type YoutubeService struct {
 	videoID          string
 	activeLiveChatID string
 
-	searchUrl     string
 	liveChatIDUrl string
 	liveChatUrl   string
+	checkLiveUrl  string
 
 	nextPageToken string
 
@@ -98,10 +99,13 @@ func (f *YoutubeChatFormatter) Format(entry *log.Entry) ([]byte, error) {
 }
 
 const (
-	BASE_SEARCH_URL       = "https://www.googleapis.com/youtube/v3/search?part=snippet&eventType=live&fields=pageInfo%2FtotalResults%2Citems%2Fid%2FvideoId%2Citems%2Fsnippet%2Ftitle%2Citems%2Fsnippet%2Fdescription%2Citems%2Fsnippet%2FchannelTitle&type=video&channelId=__channelID__&key=__key__"
 	BASE_LIVE_CHAT_ID_URL = "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&fields=pageInfo%2FtotalResults%2Citems%2FliveStreamingDetails%2FactualStartTime%2Citems%2FliveStreamingDetails%2FactiveLiveChatId&id=__id__&key=__key__"
 	BASE_LIVE_CHAT_URL    = "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet&hl=ja&maxResults=2000&fields=items%2Fsnippet%2FdisplayMessage%2Citems%2Fsnippet%2FpublishedAt%2Citems%2Fsnippet%2FauthorChannelId%2CnextPageToken%2CpollingIntervalMillis&liveChatId=__liveChatID__&key=__key__"
+	BASE_CHECK_LIVE_URL   = "https://www.youtube.com/channel/__channelID__/videos?live_view=501&flow=grid&view=2"
 	CONFIG_FILE           = "config.yml"
+	SEL_CHECK             = ".yt-badge-live"
+	SEL_VIDEOID           = "h3.yt-lockup-title > a.yt-ui-ellipsis-2"
+	SEL_CH_TITLE          = "div.yt-lockup-byline > a.yt-user-name"
 )
 
 func NewYoutubeService(logch chan string) (*YoutubeService, error) {
@@ -168,50 +172,6 @@ func (ys *YoutubeService) CheckLive() (isLive bool, err error) {
 	}
 	return true, nil
 
-}
-
-func (ys *YoutubeService) getLiveID() (string, error) {
-	var url string
-	if ys.searchUrl == "" {
-		url = strings.Replace(BASE_SEARCH_URL, "__channelID__", ys.config.ChannelID, -1)
-		url = strings.Replace(url, "__key__", ys.config.APIKey, -1)
-		ys.searchUrl = url
-	} else {
-		url = ys.searchUrl
-	}
-
-	//get
-	res, err := http.Get(url)
-	if err != nil {
-		return "", err
-	} else if res.StatusCode != 200 {
-		return "", fmt.Errorf("Unable to get this url : http status %d", res.StatusCode)
-	}
-	defer res.Body.Close()
-
-	//read body
-	body, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return "", err
-	}
-
-	//decode
-	var s LiveCheckStr
-	if err := json.Unmarshal(body, &s); err != nil {
-		return "", err
-	}
-
-	//check
-	if s.PageInfo.TotalResults == 0 {
-		return "", nil
-	}
-
-	ys.info.title = s.Items[0].Snippet.Title
-	ys.info.description = s.Items[0].Snippet.Description
-	ys.info.channelTitle = s.Items[0].Snippet.ChannelTitle
-	time.Sleep(5 * time.Second)
-
-	return s.Items[0].ID.VideoID, nil
 }
 
 func (ys *YoutubeService) getLiveChatID() (activeLiveChatID string, err error) {
@@ -300,4 +260,42 @@ func (ys *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 	}
 
 	return s, nil
+}
+
+func (ys *YoutubeService) getLiveID() (string, error) {
+	var url string
+	if ys.checkLiveUrl == "" {
+		url = strings.Replace(BASE_CHECK_LIVE_URL, "__channelID__", ys.config.ChannelID, -1)
+		ys.checkLiveUrl = url
+	} else {
+		url = ys.checkLiveUrl
+	}
+
+	//get
+	doc, err := goquery.NewDocument(url)
+	if err != nil {
+		return "", fmt.Errorf("Unable to scrapping live info page.")
+	}
+
+	//check
+	isLive := doc.Find(SEL_CHECK).Size()
+	if isLive == 0 {
+		return "", nil
+	}
+
+	videoID, ok := doc.Find(SEL_VIDEOID).Attr("href")
+	if ok != true {
+		return "", fmt.Errorf("Unable to find Video ID element.")
+	}
+	videoID = strings.Replace(videoID, "/watch?v=", "", -1)
+
+	chTitle := doc.Find(SEL_CH_TITLE).Text()
+	if err != nil {
+		return "", fmt.Errorf("Unable to find channel title element.")
+	}
+
+	ys.info.channelTitle = chTitle
+	time.Sleep(5 * time.Second)
+
+	return videoID, nil
 }
