@@ -147,7 +147,6 @@ func (ys *YoutubeService) SetConfig() error {
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		ys.logch <- "Live detected! video id: " + videoID
 		ys.videoID = videoID
 
 		liveChatID, err := ys.getLiveChatID()
@@ -155,7 +154,6 @@ func (ys *YoutubeService) SetConfig() error {
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		ys.logch <- "Live chat detected! chat id: " + liveChatID
 
 		ys.activeLiveChatID = liveChatID
 		return nil

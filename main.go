@@ -107,7 +107,6 @@ func ChatSave(ys *YoutubeService) {
 		select {
 		case isLive := <-livech:
 			if !isLive {
-				logch <- "Chat save complete. Monitoring next live."
 				return
 			}
 		default:
@@ -125,7 +124,6 @@ func ChatSave(ys *YoutubeService) {
 			time.Sleep(time.Duration(interval) * time.Millisecond)
 
 			if len(chats.Items) == 0 && chatsNum == 0 {
-				logch <- "Chats is in silence. Getting live chat ID again..."
 				ys.Init()
 				ys.SetConfig()
 				continue
