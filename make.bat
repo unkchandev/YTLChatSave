@@ -1,2 +1,2 @@
-del /Q save-youtube-live-chat.zip
-"Y:\Application\7-Zip\7z.exe" a save-youtube-live-chat.zip .\save-youtube-live-chat.exe .\config.yml.sample
+del /Q YTLChatSave.zip
+"Y:\Application\7-Zip\7z.exe" a YTLChatSave.zip .\YTLChatSave.exe .\config.yml.sample
