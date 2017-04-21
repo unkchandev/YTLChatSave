@@ -21,7 +21,7 @@ type LogWindow struct {
 func runMainWindow() {
 	MW := MainWindow{
 		AssignTo: &mw.MainWindow,
-		Title:    "save youtube live chat",
+		Title:    "YouTube Live Chat Save",
 		MinSize:  Size{640, 480},
 		Layout:   VBox{},
 		Children: []Widget{
