@@ -7,18 +7,9 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/lxn/walk"
-	. "github.com/lxn/walk/declarative"
 )
 
-type LogWindow struct {
-	*walk.MainWindow
-
-	logTE *walk.TextEdit
-}
-
 var output = log.New()
-var mw = &LogWindow{}
 var logch = make(chan string, 10)
 var livech = make(chan bool, 2)
 
@@ -32,28 +23,7 @@ func main() {
 	go logging()
 	output.Formatter = new(YoutubeChatFormatter)
 
-	MW := MainWindow{
-		AssignTo: &mw.MainWindow,
-		Title:    "save youtube live chat",
-		MinSize:  Size{640, 480},
-		Layout:   VBox{},
-		Children: []Widget{
-			TextEdit{AssignTo: &mw.logTE, ReadOnly: true},
-		},
-		MenuItems: []MenuItem{
-			Menu{
-				Text: "&File",
-				Items: []MenuItem{
-					Separator{},
-					Action{
-						Text:        "Exit",
-						OnTriggered: func() { mw.Close() },
-					},
-				},
-			},
-		},
-	}
-	MW.Run()
+	runMainWindow()
 }
 
 func mainLoop() {
