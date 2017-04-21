@@ -22,7 +22,10 @@ var mw = &LogWindow{}
 var logch = make(chan string, 10)
 var livech = make(chan bool, 2)
 
-const filenameFormat = "2006-01-02 15-04-05"
+const (
+	FILENAME_FORMAT = "2006-01-02 15-04-05"
+	LOG_FORMAT      = "2006-01-02 15:04:05"
+)
 
 func main() {
 	go mainLoop()
@@ -86,21 +89,18 @@ func checkLiveLoop(ys *YoutubeService) {
 }
 
 func ChatSave(ys *YoutubeService) {
-	if _, err := os.Stat(ys.GetChannelTitle()); os.IsNotExist(err) {
-		if err := os.Mkdir(ys.GetChannelTitle(), 0777); err != nil {
-			logch <- err.Error()
-		}
+	ys.SetConfig()
+	err := createLiveInfoFile(ys)
+	if err != nil {
+		logch <- err.Error()
 	}
 
-	filename := fmt.Sprint(ys.GetChannelTitle(), "\\", time.Now().Format(filenameFormat), ".txt")
-	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	f, err := openChatsFile(ys)
 	if err != nil {
 		logch <- err.Error()
 	}
 	defer f.Close()
 	output.Out = f
-
-	ys.SetConfig()
 
 	var chatsNum = 0
 	for {
@@ -141,9 +141,61 @@ func ChatSave(ys *YoutubeService) {
 	}
 }
 
+func createLiveInfoFile(ys *YoutubeService) error {
+	if _, err := os.Stat(ys.GetChannelTitle()); os.IsNotExist(err) {
+		if err := os.Mkdir(ys.GetChannelTitle(), 0777); err != nil {
+			return err
+		}
+	}
+
+	filename := fmt.Sprint(ys.GetChannelTitle(), "\\",
+		time.Now().Format(FILENAME_FORMAT), "-info", ".txt")
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var info liveInfo
+	for {
+		info, err = ys.GetLiveInfo()
+		if err != nil {
+			logch <- err.Error()
+		}
+		if info.channelTitle == "" || info.description == "" || info.title == "" {
+			continue
+		}
+		break
+	}
+	text := fmt.Sprint(
+		"Channel Title: ", info.channelTitle, "\r\n",
+		"Live Title: ", info.title, "\r\n",
+		"Video ID: ", ys.GetVideoID(), "\r\n",
+		"Description: ", info.description, "\r\n",
+		"Start time: ", info.startTime.Format(LOG_FORMAT), "\r\n",
+	)
+	f.WriteString(text)
+	return nil
+}
+
+func openChatsFile(ys *YoutubeService) (*os.File, error) {
+	if _, err := os.Stat(ys.GetChannelTitle()); os.IsNotExist(err) {
+		if err := os.Mkdir(ys.GetChannelTitle(), 0777); err != nil {
+			return nil, err
+		}
+	}
+	filename := fmt.Sprint(ys.GetChannelTitle(), "\\",
+		time.Now().Format(FILENAME_FORMAT), ".txt")
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 func logging() {
 	for {
 		msg := <-logch
-		mw.logTE.AppendText(time.Now().Format("2006-01-02 15:04:05") + "[LOG]" + msg + "\r\n")
+		mw.logTE.AppendText(time.Now().Format(LOG_FORMAT) + "[LOG]" + msg + "\r\n")
 	}
 }

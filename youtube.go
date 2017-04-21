@@ -66,6 +66,7 @@ type YoutubeService struct {
 	videoID          string
 	activeLiveChatID string
 
+	searchUrl     string
 	liveChatIDUrl string
 	liveChatUrl   string
 	checkLiveUrl  string
@@ -99,6 +100,7 @@ func (f *YoutubeChatFormatter) Format(entry *log.Entry) ([]byte, error) {
 }
 
 const (
+	BASE_SEARCH_URL       = "https://www.googleapis.com/youtube/v3/search?part=snippet&eventType=live&fields=pageInfo%2FtotalResults%2Citems%2Fid%2FvideoId%2Citems%2Fsnippet%2Ftitle%2Citems%2Fsnippet%2Fdescription%2Citems%2Fsnippet%2FchannelTitle&type=video&channelId=__channelID__&key=__key__"
 	BASE_LIVE_CHAT_ID_URL = "https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&fields=pageInfo%2FtotalResults%2Citems%2FliveStreamingDetails%2FactualStartTime%2Citems%2FliveStreamingDetails%2FactiveLiveChatId&id=__id__&key=__key__"
 	BASE_LIVE_CHAT_URL    = "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet&hl=ja&maxResults=2000&fields=items%2Fsnippet%2FdisplayMessage%2Citems%2Fsnippet%2FpublishedAt%2Citems%2Fsnippet%2FauthorChannelId%2CnextPageToken%2CpollingIntervalMillis&liveChatId=__liveChatID__&key=__key__"
 	BASE_CHECK_LIVE_URL   = "https://www.youtube.com/channel/__channelID__/videos?live_view=501&flow=grid&view=2"
@@ -140,18 +142,65 @@ func (ys *YoutubeService) GetChannelTitle() string {
 	return ys.info.channelTitle
 }
 
+func (ys *YoutubeService) GetVideoID() string {
+	return ys.videoID
+}
+
+func (ys *YoutubeService) GetLiveInfo() (liveInfo, error) {
+	var url string
+	if ys.searchUrl == "" {
+		url = strings.Replace(BASE_SEARCH_URL, "__channelID__", ys.config.ChannelID, -1)
+		url = strings.Replace(url, "__key__", ys.config.APIKey, -1)
+		ys.searchUrl = url
+	} else {
+		url = ys.searchUrl
+	}
+
+	//get
+	res, err := http.Get(url)
+	if err != nil {
+		return liveInfo{}, err
+	} else if res.StatusCode == 403 {
+		time.Sleep(5 * time.Second)
+		return liveInfo{}, fmt.Errorf("Too many access to API for less seconds.", res.StatusCode)
+	} else if res.StatusCode != 200 {
+		return liveInfo{}, fmt.Errorf("Unable to get this url : http status %d", res.StatusCode)
+	}
+	defer res.Body.Close()
+
+	//read body
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return liveInfo{}, err
+	}
+
+	//decode
+	var s LiveCheckStr
+	if err := json.Unmarshal(body, &s); err != nil {
+		return liveInfo{}, err
+	}
+
+	//check
+	if s.PageInfo.TotalResults == 0 {
+		return liveInfo{}, nil
+	}
+
+	ys.info.title = s.Items[0].Snippet.Title
+	ys.info.description = s.Items[0].Snippet.Description
+	ys.info.channelTitle = s.Items[0].Snippet.ChannelTitle
+	return ys.info, nil
+}
+
 func (ys *YoutubeService) SetConfig() error {
 	for {
 		videoID, err := ys.getLiveID()
 		if err != nil || videoID == "" {
-			time.Sleep(5 * time.Second)
 			continue
 		}
 		ys.videoID = videoID
 
 		liveChatID, err := ys.getLiveChatID()
 		if err != nil || liveChatID == "" {
-			time.Sleep(5 * time.Second)
 			continue
 		}
 
@@ -169,7 +218,6 @@ func (ys *YoutubeService) CheckLive() (isLive bool, err error) {
 		return false, nil
 	}
 	return true, nil
-
 }
 
 func (ys *YoutubeService) getLiveChatID() (activeLiveChatID string, err error) {
@@ -186,8 +234,10 @@ func (ys *YoutubeService) getLiveChatID() (activeLiveChatID string, err error) {
 	res, err := http.Get(url)
 	if err != nil {
 		return "", err
+	} else if res.StatusCode == 403 {
+		time.Sleep(5 * time.Second)
+		return "", fmt.Errorf("Too many access to API for less seconds.", res.StatusCode)
 	} else if res.StatusCode != 200 {
-
 		return "", fmt.Errorf("Unable to get this url : http status %d", res.StatusCode)
 	}
 	defer res.Body.Close()
@@ -211,8 +261,6 @@ func (ys *YoutubeService) getLiveChatID() (activeLiveChatID string, err error) {
 	}
 
 	ys.info.startTime = s.Items[0].LiveStreamingDetails.ActualStartTime
-	time.Sleep(5 * time.Second)
-
 	return s.Items[0].LiveStreamingDetails.ActiveLiveChatID, nil
 }
 
@@ -235,6 +283,9 @@ func (ys *YoutubeService) GetLiveChats() (chats LiveChatsStr, err error) {
 	res, _ := http.Get(url)
 	if err != nil {
 		return LiveChatsStr{}, err
+	} else if res.StatusCode == 403 {
+		time.Sleep(5 * time.Second)
+		return LiveChatsStr{}, fmt.Errorf("Too many access to API for less seconds.", res.StatusCode)
 	} else if res.StatusCode != 200 {
 		return LiveChatsStr{}, fmt.Errorf("Unable to get this url : http status %d", res.StatusCode)
 	}
@@ -293,7 +344,5 @@ func (ys *YoutubeService) getLiveID() (string, error) {
 	}
 
 	ys.info.channelTitle = chTitle
-	time.Sleep(5 * time.Second)
-
 	return videoID, nil
 }
