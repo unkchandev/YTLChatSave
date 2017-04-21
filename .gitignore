@@ -3,3 +3,4 @@ config.yml
 **/*.txt
 *.syso
 *.zip
+make.bat
