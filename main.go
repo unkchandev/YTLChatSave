@@ -19,9 +19,11 @@ var livech = make(chan bool, 2)
 const (
 	FILENAME_FORMAT = "2006-01-02 15-04-05"
 	LOG_FORMAT      = "2006-01-02 15:04:05"
+	LOCATION        = "Asia/Tokyo"
 )
 
 func main() {
+	setLocation()
 	go mainLoop()
 	go logging()
 	output.Formatter = new(YoutubeChatFormatter)
@@ -159,7 +161,7 @@ func createLiveInfoFile(ys *YoutubeService) error {
 		"Live Title: ", info.title, "\r\n",
 		"Video ID: ", ys.GetVideoID(), "\r\n",
 		"Description: ", info.description, "\r\n",
-		"Start time: ", info.startTime.Format(LOG_FORMAT), "\r\n",
+		"Start time: ", info.startTime.In(time.Local).Format(LOG_FORMAT), "\r\n",
 	)
 	f.WriteString(text)
 	return nil
@@ -210,7 +212,18 @@ func saveConfigFile(yc *YoutubeConfig) error {
 	return nil
 }
 
+func setLocation() {
+	loc, err := time.LoadLocation(LOCATION)
+	if err != nil {
+		loc = time.FixedZone(LOCATION, 9*60*60)
+	}
+	time.Local = loc
+}
+
 func logging() {
+	for mw.logTE == nil {
+		time.Sleep(100 * time.Millisecond)
+	}
 	for {
 		msg := <-logch
 		mw.logTE.AppendText(time.Now().Format(LOG_FORMAT) + "[LOG]" + msg + "\r\n")
