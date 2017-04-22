@@ -1,13 +1,8 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
-
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
-	"gopkg.in/yaml.v2"
 )
 
 var mw = &LogWindow{}
@@ -115,34 +110,4 @@ func runConfigDialog(owner walk.Form) (int, error) {
 				},
 			}},
 	}.Run(owner)
-}
-
-func loadConfig() (*YoutubeConfig, error) {
-	// read config
-	buf, err := ioutil.ReadFile(CONFIG_FILE)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to read config file. Message: " + err.Error())
-	}
-
-	var yc YoutubeConfig
-	err = yaml.Unmarshal(buf, &yc)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to parse config file. Message: " + err.Error())
-	}
-	return &yc, nil
-}
-
-func saveConfigFile(yc *YoutubeConfig) error {
-	d, err := yaml.Marshal(yc)
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(CONFIG_FILE, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	f.WriteString(string(d))
-	return nil
 }

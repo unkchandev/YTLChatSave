@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	log "github.com/Sirupsen/logrus"
 )
@@ -27,7 +30,21 @@ func main() {
 }
 
 func mainLoop() {
-	ys, err := NewYoutubeService(logch)
+	// read config
+	buf, err := ioutil.ReadFile(CONFIG_FILE)
+	if err != nil {
+		logch <- "Unable to read config file. Message: " + err.Error()
+		return
+	}
+
+	var yc YoutubeConfig
+	err = yaml.Unmarshal(buf, &yc)
+	if err != nil {
+		logch <- "Unable to parse config file. Message: " + err.Error()
+		return
+	}
+
+	ys, err := NewYoutubeService(yc, logch)
 	if err != nil {
 		logch <- "Unable to load config.yml file. Error:" + err.Error()
 		return
@@ -161,6 +178,36 @@ func openChatsFile(ys *YoutubeService) (*os.File, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+func loadConfig() (*YoutubeConfig, error) {
+	// read config
+	buf, err := ioutil.ReadFile(CONFIG_FILE)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to read config file. Message: " + err.Error())
+	}
+
+	var yc YoutubeConfig
+	err = yaml.Unmarshal(buf, &yc)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to parse config file. Message: " + err.Error())
+	}
+	return &yc, nil
+}
+
+func saveConfigFile(yc *YoutubeConfig) error {
+	d, err := yaml.Marshal(yc)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(CONFIG_FILE, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	f.WriteString(string(d))
+	return nil
 }
 
 func logging() {

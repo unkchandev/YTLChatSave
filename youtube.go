@@ -11,7 +11,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	log "github.com/Sirupsen/logrus"
-	"gopkg.in/yaml.v2"
 )
 
 type LiveCheckStr struct {
@@ -110,22 +109,9 @@ const (
 	SEL_CH_TITLE          = "div.yt-lockup-byline > a.yt-user-name"
 )
 
-func NewYoutubeService(logch chan string) (*YoutubeService, error) {
+func NewYoutubeService(yc YoutubeConfig, logch chan string) (*YoutubeService, error) {
 	ys := YoutubeService{}
 	ys.logch = logch
-
-	// read config
-	buf, err := ioutil.ReadFile(CONFIG_FILE)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to read config file. Message: " + err.Error())
-	}
-
-	var yc YoutubeConfig
-	err = yaml.Unmarshal(buf, &yc)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to parse config file. Message: " + err.Error())
-	}
-
 	ys.config = yc
 	return &ys, nil
 }
