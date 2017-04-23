@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -79,6 +81,7 @@ func checkLiveLoop(ys *YoutubeService) {
 
 func ChatSave(ys *YoutubeService) {
 	ys.SetConfig()
+	go saveMovieFile(ys)
 	err := createLiveInfoFile(ys)
 	if err != nil {
 		logch <- err.Error()
@@ -210,6 +213,24 @@ func saveConfigFile(yc *YoutubeConfig) error {
 
 	f.WriteString(string(d))
 	return nil
+}
+
+func saveMovieFile(ys *YoutubeService) {
+	if _, err := exec.LookPath("ffmpeg.exe"); err != nil {
+		logch <- fmt.Sprintf("Error: ffmpeg.exe is not found in PATH or current directory.")
+	}
+	youtubedl, err := exec.LookPath("youtube-dl.exe")
+	if err != nil {
+		logch <- fmt.Sprintf("Error: youtube-dl.exe is not found in PATH or current directory.")
+	}
+
+	fileo := fmt.Sprintf("%s/%s.%%(ext)s", ys.GetChannelTitle(),
+		time.Now().Format(FILENAME_FORMAT))
+	out, err := exec.Command(youtubedl, "-o", fileo, ys.videoID).Output()
+	outLines := strings.Split(string(out), "\n")
+	for _, v := range outLines {
+		logch <- v
+	}
 }
 
 func setLocation() {
